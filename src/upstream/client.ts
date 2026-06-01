@@ -66,8 +66,14 @@ function stringifyContent(content: unknown): string {
 
 /**
  * The upstream `getObjectSource` returns text containing JSON like
- *   {"status":"success","source":"..."}
- * Extract the source string. If parsing fails, return the raw text.
+ *   {"status":"success","source":"<JSON-escaped ABAP source>"}
+ * Extract the source string.
+ *
+ * For large objects the JSON can arrive truncated (the transport/proxy layer caps very
+ * large payloads), so JSON.parse fails. Returning the raw text in that case is wrong: the
+ * raw JSON still has escaped "\n" (literal backslash-n) instead of real line breaks, which
+ * makes downstream splitLines() report totalLines=1. Instead, best-effort extract the
+ * "source" field value and JSON-decode its escapes so line counts/structure stay correct.
  */
 export function extractSourceField(rawText: string): string {
   try {
@@ -76,9 +82,37 @@ export function extractSourceField(rawText: string): string {
       return obj.source;
     }
   } catch {
-    // fall through
+    // fall through to best-effort extraction below
   }
+
+  // Locate the start of the "source" field value (after the opening quote).
+  const marker = /"source"\s*:\s*"/.exec(rawText);
+  if (marker) {
+    const start = marker.index + marker[0].length;
+    // Find the closing unescaped quote; if truncated, take the rest of the string.
+    let end = -1;
+    for (let i = start; i < rawText.length; i++) {
+      if (rawText[i] === '"') {
+        let bs = 0;
+        for (let j = i - 1; j >= start && rawText[j] === "\\"; j--) bs++;
+        if (bs % 2 === 0) { end = i; break; }
+      }
+    }
+    const escaped = rawText.slice(start, end === -1 ? rawText.length : end);
+    return decodeJsonStringBody(escaped);
+  }
+
   return rawText;
+}
+
+/** Decode the escape sequences inside a JSON string body (no surrounding quotes). */
+function decodeJsonStringBody(s: string): string {
+  try {
+    return JSON.parse(`"${s}"`);
+  } catch {
+    // Trailing truncation may leave a dangling escape; drop it and retry once.
+    return JSON.parse(`"${s.replace(/\\+$/, "")}"`);
+  }
 }
 
 /** For tests: reset the cached client. */
