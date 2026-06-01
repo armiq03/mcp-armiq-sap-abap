@@ -1,0 +1,51 @@
+{
+  "name": "mcp-armiq-sap-abap",
+  "version": "0.1.0",
+  "description": "MCP server providing ABAP source analysis, exploration, and metrics on top of mcp-abap-abap-adt-api",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "mcp-armiq-sap-abap": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sap",
+    "abap",
+    "adt",
+    "armiq"
+  ],
+  "author": "ARMIQ",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/armiq03/mcp-armiq-sap-abap.git"
+  },
+  "bugs": {
+    "url": "https://github.com/armiq03/mcp-armiq-sap-abap/issues"
+  },
+  "homepage": "https://github.com/armiq03/mcp-armiq-sap-abap#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}
