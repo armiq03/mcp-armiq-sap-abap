@@ -1,4 +1,5 @@
 import { fetchAbapSource } from "../upstream/source-fetcher.js";
+import { splitLines } from "../util/lines.js";
 
 export const sourceOutlineSchema = {
   name: "source_outline",
@@ -42,7 +43,7 @@ export interface SourceOutlineResult {
 
 export async function sourceOutline(args: SourceOutlineArgs): Promise<SourceOutlineResult> {
   const src = await fetchAbapSource(args.objectUrl);
-  const lines = src.split("\n");
+  const lines = splitLines(src);
 
   const outline: OutlineEntry[] = [];
   for (let i = 0; i < lines.length; i++) {

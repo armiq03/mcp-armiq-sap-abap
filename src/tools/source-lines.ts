@@ -1,4 +1,5 @@
 import { fetchAbapSource } from "../upstream/source-fetcher.js";
+import { splitLines } from "../util/lines.js";
 
 export const sourceLinesSchema = {
   name: "source_lines",
@@ -36,7 +37,7 @@ export interface SourceLinesResult {
 
 export async function sourceLines(args: SourceLinesArgs): Promise<SourceLinesResult> {
   const src = await fetchAbapSource(args.objectUrl);
-  const lines = src.split("\n");
+  const lines = splitLines(src);
 
   const fromLine = Math.max(1, args.fromLine ?? 1);
   const defaultTo = fromLine + 500 - 1;

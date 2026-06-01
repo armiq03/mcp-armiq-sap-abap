@@ -1,4 +1,5 @@
 import { fetchAbapSource } from "../upstream/source-fetcher.js";
+import { splitLines } from "../util/lines.js";
 
 export const sourceInfoSchema = {
   name: "source_info",
@@ -39,7 +40,7 @@ export interface SourceInfoResult {
 
 export async function sourceInfo(args: SourceInfoArgs): Promise<SourceInfoResult> {
   const src = await fetchAbapSource(args.objectUrl);
-  const lines = src.split("\n");
+  const lines = splitLines(src);
 
   let classCount = 0,
     methodCount = 0,

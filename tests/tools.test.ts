@@ -74,6 +74,15 @@ describe("source_info", () => {
     const r = await sourceInfo({ objectUrl: "small" });
     expect(r.suggestion).toMatch(/safe to read fully/i);
   });
+
+  it("counts lines correctly when source uses CRLF (real ABAP/ADT case)", async () => {
+    const crlf = "REPORT zfoo.\r\nCLASS zcl_x DEFINITION.\r\nENDCLASS.\r\nFORM x.\r\nENDFORM.";
+    mockedFetch.mockResolvedValue(crlf);
+    const r = await sourceInfo({ objectUrl: "x" });
+    expect(r.totalLines).toBe(5);
+    expect(r.structure.classCount).toBe(1);
+    expect(r.structure.formCount).toBe(1);
+  });
 });
 
 // === source_lines ===

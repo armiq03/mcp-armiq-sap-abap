@@ -1,4 +1,5 @@
 import { fetchAbapSource } from "../upstream/source-fetcher.js";
+import { splitLines } from "../util/lines.js";
 
 export const sourceSearchSchema = {
   name: "source_search",
@@ -56,7 +57,7 @@ export async function sourceSearch(args: SourceSearchArgs): Promise<SourceSearch
   }
 
   const src = await fetchAbapSource(args.objectUrl);
-  const lines = src.split("\n");
+  const lines = splitLines(src);
 
   const matches: SourceSearchMatch[] = [];
   for (let i = 0; i < lines.length && matches.length < maxMatches; i++) {
