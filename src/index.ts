@@ -17,13 +17,14 @@ import { sourceInfoSchema, sourceInfo } from "./tools/source-info.js";
 import { sourceLinesSchema, sourceLines } from "./tools/source-lines.js";
 import { sourceOutlineSchema, sourceOutline } from "./tools/source-outline.js";
 import { sourceSearchSchema, sourceSearch } from "./tools/source-search.js";
+import { sourceSaveSchema, sourceSave } from "./tools/source-save.js";
 
 const server = new Server(
   { name: "mcp-armiq-sap-abap", version: "0.1.0" },
   { capabilities: { tools: {} } },
 );
 
-const tools = [sourceInfoSchema, sourceLinesSchema, sourceOutlineSchema, sourceSearchSchema];
+const tools = [sourceInfoSchema, sourceLinesSchema, sourceOutlineSchema, sourceSearchSchema, sourceSaveSchema];
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools,
@@ -45,6 +46,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         break;
       case "source_search":
         result = await sourceSearch(args as any);
+        break;
+      case "source_save":
+        result = await sourceSave(args as any);
         break;
       default:
         return {
