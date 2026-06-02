@@ -23,15 +23,15 @@ describe("extractSourceField", () => {
     expect(extractSourceField(raw)).toBe(src);
   });
 
-  it("recovers source with real newlines from a TRUNCATED JSON envelope", () => {
-    // Regression: large objects arrive truncated, JSON.parse fails. The old code returned
-    // the raw JSON (escaped \n literals) -> splitLines saw 1 line. Now we extract + decode.
+  it("unwraps the MCP envelope and decodes real newlines (regression: totalLines=1)", () => {
+    // Upstream returns its MCP envelope serialized as JSON, with the {status,source}
+    // JSON nested inside content[].text. The bug left escaped "\n" literals in place.
     const src = Array.from({ length: 2000 }, (_, i) => `  WRITE: / ${i}.`).join("\n");
-    const full = JSON.stringify({ status: "success", source: src });
-    const truncated = full.slice(0, full.length - 30); // chop the closing quote/brace
-    const out = extractSourceField(truncated);
-    expect(out.includes("\n")).toBe(true); // real LF, not literal "\\n"
-    expect(out.split("\n").length).toBeGreaterThan(1900);
-    expect(out.startsWith("  WRITE: / 0.")).toBe(true);
+    const inner = JSON.stringify({ status: "success", source: src });
+    const envelope = JSON.stringify({ content: [{ type: "text", text: inner }] });
+    const out = extractSourceField(envelope);
+    expect(out).toBe(src);
+    expect(out.includes("\n")).toBe(true);
+    expect(out.split("\n").length).toBe(2000);
   });
 });

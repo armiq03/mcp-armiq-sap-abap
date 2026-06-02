@@ -33,6 +33,11 @@ export async function getUpstream(): Promise<Client> {
       { capabilities: {} },
     );
     await client.connect(transport);
+    // If the upstream child dies (SAP session loss, crash), drop the cached client so the
+    // next call reconnects instead of failing forever with "-32000 Connection closed".
+    transport.onclose = () => {
+      if (cached === client) cached = null;
+    };
     cached = client;
     connecting = null;
     return client;
@@ -41,13 +46,28 @@ export async function getUpstream(): Promise<Client> {
   return connecting;
 }
 
+function isConnectionClosed(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return /-32000|connection closed|not connected/i.test(m);
+}
+
 /** Call an upstream MCP tool and return the parsed text content as a string. */
 export async function callUpstream(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<string> {
-  const client = await getUpstream();
-  const res = await client.callTool({ name: toolName, arguments: args });
+  let res;
+  try {
+    const client = await getUpstream();
+    res = await client.callTool({ name: toolName, arguments: args });
+  } catch (err) {
+    if (!isConnectionClosed(err)) throw err;
+    // Stale/dead upstream: reset and reconnect once.
+    cached = null;
+    connecting = null;
+    const client = await getUpstream();
+    res = await client.callTool({ name: toolName, arguments: args });
+  }
   // The MCP response shape: { content: [{type: "text", text: "..."}], isError?: boolean }
   if (res.isError) {
     throw new Error(`Upstream tool ${toolName} failed: ${stringifyContent(res.content)}`);
@@ -65,54 +85,34 @@ function stringifyContent(content: unknown): string {
 }
 
 /**
- * The upstream `getObjectSource` returns text containing JSON like
- *   {"status":"success","source":"<JSON-escaped ABAP source>"}
- * Extract the source string.
+ * Extract the ABAP source string from the upstream `getObjectSource` response.
  *
- * For large objects the JSON can arrive truncated (the transport/proxy layer caps very
- * large payloads), so JSON.parse fails. Returning the raw text in that case is wrong: the
- * raw JSON still has escaped "\n" (literal backslash-n) instead of real line breaks, which
- * makes downstream splitLines() report totalLines=1. Instead, best-effort extract the
- * "source" field value and JSON-decode its escapes so line counts/structure stay correct.
+ * The text we receive is the upstream MCP envelope serialized as JSON:
+ *   {"content":[{"type":"text","text":"{\"status\":\"success\",\"source\":\"...\\n...\"}"}]}
+ * i.e. the inner {status,source} JSON is nested inside content[].text. We must unwrap the
+ * envelope first, then parse the inner JSON to get `source` with real line breaks. Failing
+ * to unwrap left the escaped "\n" literals in place, so splitLines() reported totalLines=1.
  */
 export function extractSourceField(rawText: string): string {
-  try {
-    const obj = JSON.parse(rawText);
+  let text = rawText;
+  // Unwrap the MCP envelope ({content:[{text}]}) if present — may be nested.
+  for (let i = 0; i < 3; i++) {
+    let obj: any;
+    try {
+      obj = JSON.parse(text);
+    } catch {
+      break;
+    }
     if (obj && typeof obj === "object" && typeof obj.source === "string") {
       return obj.source;
     }
-  } catch {
-    // fall through to best-effort extraction below
-  }
-
-  // Locate the start of the "source" field value (after the opening quote).
-  const marker = /"source"\s*:\s*"/.exec(rawText);
-  if (marker) {
-    const start = marker.index + marker[0].length;
-    // Find the closing unescaped quote; if truncated, take the rest of the string.
-    let end = -1;
-    for (let i = start; i < rawText.length; i++) {
-      if (rawText[i] === '"') {
-        let bs = 0;
-        for (let j = i - 1; j >= start && rawText[j] === "\\"; j--) bs++;
-        if (bs % 2 === 0) { end = i; break; }
-      }
+    if (obj && Array.isArray(obj.content) && obj.content[0]?.text != null) {
+      text = String(obj.content[0].text);
+      continue;
     }
-    const escaped = rawText.slice(start, end === -1 ? rawText.length : end);
-    return decodeJsonStringBody(escaped);
+    break;
   }
-
-  return rawText;
-}
-
-/** Decode the escape sequences inside a JSON string body (no surrounding quotes). */
-function decodeJsonStringBody(s: string): string {
-  try {
-    return JSON.parse(`"${s}"`);
-  } catch {
-    // Trailing truncation may leave a dangling escape; drop it and retry once.
-    return JSON.parse(`"${s.replace(/\\+$/, "")}"`);
-  }
+  return text;
 }
 
 /** For tests: reset the cached client. */
