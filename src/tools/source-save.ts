@@ -1,5 +1,5 @@
 import { writeFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, isAbsolute } from "node:path";
 import { fetchAbapSource } from "../upstream/source-fetcher.js";
 import { splitLines } from "../util/lines.js";
 
@@ -14,7 +14,7 @@ export const sourceSaveSchema = {
     type: "object",
     properties: {
       objectUrl: { type: "string", description: "ADT object URL or object name" },
-      filePath: { type: "string", description: "Absolute local file path to write" },
+      filePath: { type: "string", description: "ABSOLUTE local file path to write (relative paths are rejected)" },
       fromLine: { type: "number", description: "Optional 1-based start line (inclusive). Omit for full source." },
       toLine: { type: "number", description: "Optional 1-based end line (inclusive). Omit for full source." },
     },
@@ -38,6 +38,12 @@ export interface SourceSaveResult {
 }
 
 export async function sourceSave(args: SourceSaveArgs): Promise<SourceSaveResult> {
+  if (!isAbsolute(args.filePath)) {
+    throw new Error(
+      `filePath must be ABSOLUTE (got "${args.filePath}"). A relative path would be written ` +
+      `to the server process's working directory, not your workspace. Pass a full path.`,
+    );
+  }
   const src = await fetchAbapSource(args.objectUrl);
   const lines = splitLines(src);
   let out = src;
